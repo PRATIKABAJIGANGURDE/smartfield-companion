@@ -1,5 +1,20 @@
 export type SensorStatus = 'optimal' | 'warning' | 'critical';
 
+export type CropType = 'rice' | 'wheat' | 'vegetables' | 'corn' | 'cotton';
+
+export interface OptimalRange {
+  min: number;
+  max: number;
+}
+
+export interface CropPreset {
+  id: CropType;
+  name: string;
+  icon: string;
+  description: string;
+  optimalRanges: Record<string, OptimalRange>;
+}
+
 export interface SensorData {
   id: string;
   name: string;
@@ -9,7 +24,7 @@ export interface SensorData {
   icon: string;
   min: number;
   max: number;
-  optimal: { min: number; max: number };
+  optimal: OptimalRange;
   history: number[];
   lastUpdated: Date;
 }
@@ -24,6 +39,12 @@ export interface AISuggestion {
   icon: string;
 }
 
+export interface RoverState {
+  connected: boolean;
+  battery: number;
+  speed: number;
+  position: { x: number; y: number };
+}
 export interface RoverState {
   connected: boolean;
   battery: number;
