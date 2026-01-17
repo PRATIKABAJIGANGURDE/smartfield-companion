@@ -1,17 +1,24 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { SensorCard } from '@/components/dashboard/SensorCard';
 import { AISuggestionPanel } from '@/components/dashboard/AISuggestionPanel';
 import { RoverControl } from '@/components/dashboard/RoverControl';
-import { mockSensorData, mockAISuggestions, mockRoverState } from '@/data/mockSensorData';
+import { CropSelector } from '@/components/dashboard/CropSelector';
+import { getSensorData, getAISuggestions, mockRoverState } from '@/data/mockSensorData';
+import { CropType } from '@/types/sensor';
 import { Activity, Gamepad2 } from 'lucide-react';
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('insights');
+  const [selectedCrop, setSelectedCrop] = useState<CropType>('vegetables');
+
+  // Recalculate sensor data and suggestions when crop changes
+  const sensorData = useMemo(() => getSensorData(selectedCrop), [selectedCrop]);
+  const aiSuggestions = useMemo(() => getAISuggestions(selectedCrop, sensorData), [selectedCrop, sensorData]);
 
   // Count issues for badge
-  const issueCount = mockSensorData.filter(s => s.status !== 'optimal').length;
+  const issueCount = sensorData.filter(s => s.status !== 'optimal').length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -42,13 +49,22 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="insights" className="space-y-6 animate-fade-in">
+            {/* Crop Selector */}
+            <CropSelector 
+              selectedCrop={selectedCrop} 
+              onSelectCrop={setSelectedCrop} 
+            />
+
             {/* Sensor Grid */}
             <section>
               <h2 className="font-display font-semibold text-lg text-foreground mb-4">
                 Sensor Readings
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  for {selectedCrop.charAt(0).toUpperCase() + selectedCrop.slice(1)}
+                </span>
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {mockSensorData.map((sensor) => (
+                {sensorData.map((sensor) => (
                   <SensorCard key={sensor.id} sensor={sensor} />
                 ))}
               </div>
@@ -56,7 +72,7 @@ const Index = () => {
 
             {/* AI Suggestions */}
             <section>
-              <AISuggestionPanel suggestions={mockAISuggestions} />
+              <AISuggestionPanel suggestions={aiSuggestions} />
             </section>
 
             {/* Legend */}
