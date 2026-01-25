@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { VirtualJoystick } from './VirtualJoystick';
 import { RoverState } from '@/types/sensor';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { 
-  Battery, 
-  Wifi, 
-  WifiOff, 
-  StopCircle, 
+import { api } from '@/services/api';
+import {
+  Battery,
+  Wifi,
+  WifiOff,
+  StopCircle,
   Gauge,
   Bot,
   CircleDot
@@ -22,12 +23,25 @@ export function RoverControl({ roverState: initialState }: RoverControlProps) {
   const [roverState, setRoverState] = useState(initialState);
   const [joystickPosition, setJoystickPosition] = useState({ x: 0, y: 0 });
   const [isEmergencyStop, setIsEmergencyStop] = useState(false);
+  const lastSentRef = useRef<number>(0);
 
-  const handleJoystickMove = (position: { x: number; y: number }) => {
+  const handleJoystickMove = useCallback((position: { x: number; y: number }) => {
     if (isEmergencyStop) return;
     setJoystickPosition(position);
-    // In real implementation, this would send commands to the rover
-  };
+
+    // Throttle requests to max 10 per second (100ms)
+    const now = Date.now();
+    if (now - lastSentRef.current > 100) {
+      // Scale position (-1 to 1) to (-100 to 100)
+      const x = Math.round(position.x * 100);
+      const y = Math.round(position.y * 100);
+      const speed = roverState.speed;
+
+      // Backend now handles steering automatically based on X
+      api.drive(x, y, speed);
+      lastSentRef.current = now;
+    }
+  }, [isEmergencyStop, roverState.speed]);
 
   const handleSpeedChange = (value: number[]) => {
     setRoverState(prev => ({ ...prev, speed: value[0] }));
@@ -141,7 +155,7 @@ export function RoverControl({ roverState: initialState }: RoverControlProps) {
           <CircleDot className="w-5 h-5 text-primary" />
           <h3 className="font-display font-semibold text-foreground">Movement Vector</h3>
         </div>
-        
+
         <div className="grid grid-cols-2 gap-4 text-center">
           <div className="p-3 rounded-lg bg-secondary/50">
             <p className="text-xs text-muted-foreground mb-1">Forward/Back</p>

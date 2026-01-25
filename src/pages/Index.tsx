@@ -1,21 +1,129 @@
 import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { SensorCard } from '@/components/dashboard/SensorCard';
 import { AISuggestionPanel } from '@/components/dashboard/AISuggestionPanel';
 import { RoverControl } from '@/components/dashboard/RoverControl';
 import { CropSelector } from '@/components/dashboard/CropSelector';
-import { getSensorData, getAISuggestions, mockRoverState } from '@/data/mockSensorData';
-import { CropType } from '@/types/sensor';
+import { getOptimalRange, getCropPreset } from '@/data/cropPresets';
+import { CropType, SensorData, SensorStatus, RoverState } from '@/types/sensor';
+import { api } from '@/services/api';
 import { Activity, Gamepad2 } from 'lucide-react';
+
+// Helper to map backend data to frontend SensorData structure
+// Reuses logic from mockSensorData but with real values
+const mapBackendToSensorData = (backendData: any, cropType: CropType): SensorData[] => {
+  if (!backendData) return [];
+
+  const soil = backendData.soil || {};
+  const env = backendData.environment || {};
+
+  // Flattened map of available values
+  const values: Record<string, number> = {
+    moisture: soil.moisture,
+    'soil-temp': soil.temperature, // Map backend 'temperature' to frontend 'soil-temp'
+    ph: soil.ph,
+    nitrogen: soil.nitrogen,
+    phosphorus: soil.phosphorus,
+    potassium: soil.potassium,
+    'ambient-temp': env.temperature,
+    humidity: env.humidity
+  };
+
+  // Base config for metadata (units, icons, ranges)
+  const baseConfig: Record<string, any> = {
+    moisture: { unit: '%', name: 'Soil Moisture', icon: 'Droplets', min: 0, max: 100 },
+    'soil-temp': { unit: '°C', name: 'Soil Temperature', icon: 'Thermometer', min: 0, max: 50 },
+    ph: { unit: '', name: 'Soil pH', icon: 'FlaskConical', min: 0, max: 14 },
+    nitrogen: { unit: 'mg/kg', name: 'Nitrogen (N)', icon: 'Leaf', min: 0, max: 150 },
+    phosphorus: { unit: 'mg/kg', name: 'Phosphorus (P)', icon: 'Sparkles', min: 0, max: 100 },
+    potassium: { unit: 'mg/kg', name: 'Potassium (K)', icon: 'Gem', min: 0, max: 100 },
+    humidity: { unit: '%', name: 'Ambient Humidity', icon: 'CloudRain', min: 0, max: 100 },
+    'ambient-temp': { unit: '°C', name: 'Ambient Temperature', icon: 'Sun', min: 0, max: 50 },
+  };
+
+  return Object.entries(baseConfig).map(([id, config]) => {
+    const val = values[id] ?? 0; // Default to 0 if missing
+    const optimal = getOptimalRange(cropType, id);
+
+    // Calculate status
+    let status: SensorStatus = 'critical';
+    if (val >= optimal.min && val <= optimal.max) status = 'optimal';
+    else if (val >= optimal.min - (optimal.max - optimal.min) * 0.3 && val <= optimal.max + (optimal.max - optimal.min) * 0.3) status = 'warning';
+
+    return {
+      id,
+      name: config.name,
+      value: val,
+      unit: config.unit,
+      status,
+      icon: config.icon,
+      min: config.min,
+      max: config.max,
+      optimal,
+      // Simulate history for sparkline based on current value until we have DB
+      history: Array(24).fill(val).map(v => v + (Math.random() - 0.5) * (v * 0.1)),
+      lastUpdated: new Date()
+    };
+  });
+};
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('insights');
   const [selectedCrop, setSelectedCrop] = useState<CropType>('vegetables');
 
-  // Recalculate sensor data and suggestions when crop changes
-  const sensorData = useMemo(() => getSensorData(selectedCrop), [selectedCrop]);
-  const aiSuggestions = useMemo(() => getAISuggestions(selectedCrop, sensorData), [selectedCrop, sensorData]);
+  // Query: Sensors
+  const { data: rawSensorData } = useQuery({
+    queryKey: ['sensors'],
+    queryFn: api.getSensors,
+    refetchInterval: 3000,
+  });
+
+  // Query: Suggestions
+  const { data: rawSuggestions } = useQuery({
+    queryKey: ['suggestions'],
+    queryFn: api.getSuggestions,
+    refetchInterval: 5000,
+  });
+
+  // Query: Status
+  const { data: rawStatus } = useQuery({
+    queryKey: ['status'],
+    queryFn: api.getStatus,
+    refetchInterval: 2000,
+  });
+
+  // Derived State
+  const sensorData = useMemo(() =>
+    mapBackendToSensorData(rawSensorData, selectedCrop),
+    [rawSensorData, selectedCrop]
+  );
+
+  // Use backend suggestions if available, otherwise formatted list
+  // The backend returns { summary: string, recommendations: [] }
+  // We need to map recommendations to AISuggestion[]
+  const aiSuggestions = useMemo(() => {
+    if (!rawSuggestions?.recommendations) return [];
+
+    return rawSuggestions.recommendations.map((rec: any, i: number) => ({
+      id: `rec-${i}`,
+      type: 'general', // Default, could infer from action text
+      title: rec.action,
+      description: rec.action, // Backend gives concise action
+      reason: rec.reason,
+      priority: 'high', // Default for now
+      icon: 'Lightbulb'
+    }));
+  }, [rawSuggestions]);
+
+  // Map status to RoverState
+  const roverState: RoverState = useMemo(() => ({
+    connected: rawStatus?.connection === 'online',
+    battery: rawStatus?.battery ?? 0,
+    speed: 50, // This is local control state mainly, but could come from backend if two-way
+    position: { x: 0, y: 0 }
+  }), [rawStatus]);
 
   // Count issues for badge
   const issueCount = sensorData.filter(s => s.status !== 'optimal').length;
@@ -27,8 +135,8 @@ const Index = () => {
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
           <TabsList className="grid w-full grid-cols-2 h-11 sm:h-12">
-            <TabsTrigger 
-              value="insights" 
+            <TabsTrigger
+              value="insights"
               className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium"
             >
               <Activity className="w-4 h-4" />
@@ -39,7 +147,7 @@ const Index = () => {
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="control"
               className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium"
             >
@@ -50,9 +158,9 @@ const Index = () => {
 
           <TabsContent value="insights" className="space-y-4 sm:space-y-6 animate-fade-in">
             {/* Crop Selector */}
-            <CropSelector 
-              selectedCrop={selectedCrop} 
-              onSelectCrop={setSelectedCrop} 
+            <CropSelector
+              selectedCrop={selectedCrop}
+              onSelectCrop={setSelectedCrop}
             />
 
             {/* Sensor Grid */}
@@ -98,7 +206,7 @@ const Index = () => {
 
           <TabsContent value="control" className="animate-fade-in">
             <div className="max-w-md mx-auto">
-              <RoverControl roverState={mockRoverState} />
+              <RoverControl roverState={roverState} />
             </div>
           </TabsContent>
         </Tabs>
