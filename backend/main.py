@@ -1,14 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Try relative import first (if running from backend/)
-try:
-    from api import control, sensors, suggestions, status
-    from rover.motion import rover
-except ImportError:
-    # Fallback to absolute import (if running from root)
-    from backend.api import control, sensors, suggestions, status
-    from backend.rover.motion import rover
+import sys
+import os
+
+# Add the parent directory to sys.path so we can import 'backend'
+# This fixes "ModuleNotFoundError" when running from inside the backend/ directory
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend.api import control, sensors, suggestions, status
+from backend.rover.motion import rover
 
 app = FastAPI(title="SmartFarm Rover Backend")
 
