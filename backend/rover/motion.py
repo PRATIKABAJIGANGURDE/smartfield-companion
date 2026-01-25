@@ -1,109 +1,94 @@
 import time
 import logging
+from backend.config import config
 from .motor_driver import MotorDriver
 from .servo_controller import ServoController
 
 class RoverMotion:
     def __init__(self):
         self.motors = MotorDriver()
-        # Initialize 4 servos
-        # Default pins: 23, 24, 25, 8. Update here if hardware changes.
-        self.servo_pins = [23, 24, 25, 8]
-        self.servos = [ServoController(pin) for pin in self.servo_pins]
-        # Alias for backward compatibility (accessing first servo)
-        self.servo = self.servos[0]
+        
+        # Initialize 4 Servos for Steering (4WS)
+        # Assuming layout: Front-Left, Front-Right, Rear-Left, Rear-Right
+        self.servo_fl = ServoController(config.SERVO_PIN_FL)
+        self.servo_fr = ServoController(config.SERVO_PIN_FR)
+        self.servo_rl = ServoController(config.SERVO_PIN_RL)
+        self.servo_rr = ServoController(config.SERVO_PIN_RR)
+        
         self.last_cmd_time = time.time()
         
-    def calculate_steering_angles(self, x):
-        """
-        Calculate 4-wheel steering angles based on Joystick X.
-        x: -100 (Left) to 100 (Right)
-        Returns: [front_left, front_right, rear_left, rear_right]
-        Logic: Counter-steering (4WS) for tight turns.
-        Center: 90 degrees
-        Range: +/- 45 degrees (45 to 135)
-        """
-        # Map x (-100 to 100) to angle offset (-45 to 45)
-        offset = (x / 100.0) * 45
-        
-        # Front wheels turn WITH the turn (Left turn -> Angle < 90)
-        # Note: If 0 is Right and 180 is Left on your servo, invert this sign.
-        # Assuming: 0=Right, 90=Center, 180=Left
-        # Left Turn (x < 0) -> Front should point Left (Angle > 90)
-        # Wait, usually 0 is one side. Let's assume standard:
-        # 0 = Far Right, 90 = Center, 180 = Far Left.
-        # So x=-100 (Left) -> Angle = 135.
-        #    x=100 (Right) -> Angle = 45.
-        
-        front_angle = 90 + offset  # Wait, if x=100, 90+45=135 (Left?). 
-        # Let's fix direction: x is Left(-100)/Right(100).
-        # We want x=100 (Right) -> servos point Right.
-        # If 90 is center. Right is usually < 90 or > 90 depending on horn.
-        # Let's assume: Right is < 90 (e.g. 45), Left is > 90 (e.g. 135).
-        # So x=100 -> want 45. x=-100 -> want 135.
-        # Formula: 90 - (x/100 * 45)
-        
-        front_angle = 90 - offset 
-        
-        # Rear wheels turn OPPOSITE (Counter-Steer)
-        # x=100 (Right) -> Rear should point Left (135).
-        rear_angle = 90 + offset
-        
-        return [front_angle, front_angle, rear_angle, rear_angle]
-
     def joystick_to_wheels(self, x, y, max_speed=100):
         """
-        Convert joystick y into simple forward/backward speed.
-        Steering is now handled by servos, so we just drive.
+        Convert joystick x,y into left & right wheel speeds.
+        x: -100 to 100 (left/right)
+        y: -100 to 100 (forward/backward)
+        returns: left_speed, right_speed (-100 to 100)
         """
-        # Simple Drive: Both sides equal to Y
-        speed_val = y
-        
-        # Clamp values
-        speed_val = max(-max_speed, min(max_speed, speed_val))
-        
-        return speed_val, speed_val
+        # Differential drive mixing
+        left = y + x
+        right = y - x
 
-    def process_command(self, x: int, y: int, speed: int, servo_angle: int = None, servos: list = None):
+        # Clamp values
+        left = max(-max_speed, min(max_speed, left))
+        right = max(-max_speed, min(max_speed, right))
+
+        return left, right
+        
+    def joystick_to_steering(self, x):
+        """
+        Convert turn intent (x) to servo angles for 4-Wheel Steering.
+        front: Turn with x (90 + x)
+        rear: Turn against x (90 - x) for tighter radius
+        Range: 70 to 110 degrees (clamped)
+        """
+        # Map x (-100 to 100) to delta angle (e.g., +/- 20 degrees)
+        delta = (x * 20.0) / 100.0
+        
+        # Front wheels turn in direction of turn
+        # Rear wheels turn opposite for tighter radius (Counter-steering)
+        front_angle = 90 + delta
+        rear_angle = 90 - delta
+        
+        # Clamp to safe range (70-110)
+        front_angle = max(70, min(110, front_angle))
+        rear_angle = max(70, min(110, rear_angle))
+        
+        return front_angle, rear_angle
+
+    def process_command(self, x: int, y: int, speed: int, servo_angle: int = None):
         """
         Process a high-level command to move the rover.
         """
         self.last_cmd_time = time.time()
         
-        # 1. Handle Steering (Servos)
-        if servos:
-            # Explicit servo override from API
-            target_angles = servos
-        else:
-            # Automatic 4WS Steering from Joystick X
-            target_angles = self.calculate_steering_angles(x)
-            
-        # Apply angles to servos
-        for i, angle in enumerate(target_angles):
-            if i < len(self.servos):
-                self.servos[i].set_angle(angle)
-
-        # 2. Handle Motors (Drive)
-        # Use Y for speed (Forward/Back). X is ignored for differential drive now.
+        # 1. Drive Motors (Differential)
+        # Note: If x determines steering, do we still want it affecting wheel speed (skid steer)?
+        # For a 6WD with 4WS, usually you do both (Ackermann-ish + Differential) to help turn.
+        # Keeping existing differential mix as requested implicitly.
         left, right = self.joystick_to_wheels(x, y, max_speed=speed)
         
-        msg = f"Cmd: x={x}, y={y} -> Speed={left}, Angles={target_angles}"
-        logging.info(msg)
-        print(f"DEBUG: {msg}") # Force output to console
-        
-        # Apply to motors
         self.motors.set_speed(left, right)
         
-        # Handle deprecated single 'servo_angle' if really needed (ignoring for now to avoid conflict)
+        # 2. Steering Servos (4WS)
+        front, rear = self.joystick_to_steering(x)
+        
+        self.servo_fl.set_angle(front)
+        self.servo_fr.set_angle(front)
+        self.servo_rl.set_angle(rear)
+        self.servo_rr.set_angle(rear)
+        
+        logging.info(f"Cmd: x={x} y={y} | Motors: L={left} R={right} | Steer: F={front:.1f} R={rear:.1f}")
 
     def check_watchdog(self):
         """
         Check if too much time has passed since last command.
-        Stops motors if timeout exceeded (e.g. 1 second).
+        Stops motors if timeout exceeded.
         """
-        if time.time() - self.last_cmd_time > 1.0:
+        if time.time() - self.last_cmd_time > config.WATCHDOG_TIMEOUT:
             self.motors.stop()
-            # logging.warning("Watchdog triggered: Rover stopped.")
+            # Optional: Reset servos to center?
+            # self.servo_fl.set_angle(90)
+            # ...
             return True
         return False
 

@@ -1,5 +1,6 @@
 import logging
 import sys
+from backend.config import config
 
 # Mock RPi.GPIO if not running on Raspberry Pi
 try:
@@ -42,33 +43,24 @@ class MotorDriver:
     For 6-wheel rovers, motors should be wired in parallel (3 Left, 3 Right).
     """
     def __init__(self):
-        # GPIO Pins Configuration
-        self.LEFT_IN1 = 5
-        self.LEFT_IN2 = 6
-        self.LEFT_PWM = 12
-
-        self.RIGHT_IN1 = 13
-        self.RIGHT_IN2 = 19
-        self.RIGHT_PWM = 18
-
         # Setup GPIO
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
 
         pins = [
-            self.LEFT_IN1, self.LEFT_IN2,
-            self.RIGHT_IN1, self.RIGHT_IN2
+            config.LEFT_IN1, config.LEFT_IN2,
+            config.RIGHT_IN1, config.RIGHT_IN2
         ]
 
         for p in pins:
             GPIO.setup(p, GPIO.OUT)
 
-        GPIO.setup(self.LEFT_PWM, GPIO.OUT)
-        GPIO.setup(self.RIGHT_PWM, GPIO.OUT)
+        GPIO.setup(config.LEFT_PWM, GPIO.OUT)
+        GPIO.setup(config.RIGHT_PWM, GPIO.OUT)
 
-        # Initialize PWM at 1000Hz
-        self.pwm_left = GPIO.PWM(self.LEFT_PWM, 1000)
-        self.pwm_right = GPIO.PWM(self.RIGHT_PWM, 1000)
+        # Initialize PWM using config frequency
+        self.pwm_left = GPIO.PWM(config.LEFT_PWM, config.PWM_FREQ_MOTOR)
+        self.pwm_right = GPIO.PWM(config.RIGHT_PWM, config.PWM_FREQ_MOTOR)
 
         self.pwm_left.start(0)
         self.pwm_right.start(0)
@@ -81,7 +73,7 @@ class MotorDriver:
         speed: -100 to 100
         """
         # Clamp speed
-        speed = max(-100, min(100, speed))
+        speed = max(-config.MAX_SPEED, min(config.MAX_SPEED, speed))
         
         if speed >= 0:
             GPIO.output(in1, GPIO.HIGH)
@@ -98,12 +90,12 @@ class MotorDriver:
         left_speed, right_speed: -100 to 100
         """
         self.set_motor(
-            self.LEFT_IN1, self.LEFT_IN2,
+            config.LEFT_IN1, config.LEFT_IN2,
             self.pwm_left, left_speed
         )
 
         self.set_motor(
-            self.RIGHT_IN1, self.RIGHT_IN2,
+            config.RIGHT_IN1, config.RIGHT_IN2,
             self.pwm_right, right_speed
         )
 
@@ -111,7 +103,7 @@ class MotorDriver:
         """Stop all motors immediately."""
         self.pwm_left.ChangeDutyCycle(0)
         self.pwm_right.ChangeDutyCycle(0)
-        GPIO.output(self.LEFT_IN1, GPIO.LOW)
-        GPIO.output(self.LEFT_IN2, GPIO.LOW)
-        GPIO.output(self.RIGHT_IN1, GPIO.LOW)
-        GPIO.output(self.RIGHT_IN2, GPIO.LOW)
+        GPIO.output(config.LEFT_IN1, GPIO.LOW)
+        GPIO.output(config.LEFT_IN2, GPIO.LOW)
+        GPIO.output(config.RIGHT_IN1, GPIO.LOW)
+        GPIO.output(config.RIGHT_IN2, GPIO.LOW)

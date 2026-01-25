@@ -1,4 +1,5 @@
 import logging
+from backend.config import config
 
 # Mock RPi.GPIO if not running on Raspberry Pi (Shared mock logic could be extracted, but keeping isolated for now)
 try:
@@ -22,11 +23,11 @@ class ServoController:
     def __init__(self, pin):
         self.pin = pin
         try:
-            GPIO.setup(pin, GPIO.OUT)
-            self.pwm = GPIO.PWM(pin, 50) # 50Hz for servos
+            GPIO.setup(self.pin, GPIO.OUT)
+            self.pwm = GPIO.PWM(self.pin, config.PWM_FREQ_SERVO)
             self.pwm.start(0)
         except Exception as e:
-            logging.error(f"Failed to initialize servo on pin {pin}: {e}")
+            logging.error(f"Failed to initialize servo on pin {self.pin}: {e}")
 
     def set_angle(self, angle):
         """

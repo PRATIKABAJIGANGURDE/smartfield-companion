@@ -21,7 +21,6 @@ def test_motion():
         {"x": 0, "y": -100, "speed": 100, "desc": "Full Backward"},
         {"x": 100, "y": 0, "speed": 100, "desc": "Hard Right Turn (4WS)"},
         {"x": -50, "y": 50, "speed": 100, "desc": "Gentle Left Turn (4WS)"},
-        {"x": 0, "y": 0, "speed": 0, "servos": [90, 45, 135, 0], "desc": "Servo Test (Multi Override)"},
         {"x": 0, "y": 0, "speed": 0, "servo_angle": 90, "desc": "Servo Test (Single Legacy)"},
     ]
 
@@ -31,8 +30,7 @@ def test_motion():
             case['x'], 
             case['y'], 
             case['speed'], 
-            servo_angle=case.get('servo_angle'), 
-            servos=case.get('servos')
+            servo_angle=case.get('servo_angle')
         )
         
     print("\nCheck logs above for expected motor values.")
