@@ -88,7 +88,9 @@ class RoverMotion:
         self.servo_rl.set_angle(rear)
         self.servo_rr.set_angle(rear)
         
-        logging.info(f"Cmd: x={x} y={y} | Motors: L={left} R={right} | Steer: F={front:.1f} R={rear:.1f}")
+        # Log only if values changed significantly (reduce spam)
+        # Or just log sparsely
+        # logging.info(f"Cmd: x={x} y={y} | Motors: L={left} R={right} | Steer: F={front:.1f} R={rear:.1f}")
 
     def check_watchdog(self):
         """
