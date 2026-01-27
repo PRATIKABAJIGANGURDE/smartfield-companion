@@ -67,6 +67,7 @@ def test_servo():
             
             print(f"Angle: {angle}° -> Duty: {duty:.2f}%")
             pwm.ChangeDutyCycle(duty)
+            time.sleep(0.1)
             
             print("...Listen for buzzing/stalling...")
 

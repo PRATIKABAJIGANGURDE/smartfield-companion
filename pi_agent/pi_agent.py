@@ -16,7 +16,7 @@ from config import config
 # Configuration
 # Hardcoded IP for convenience (Laptop IP)
 BACKEND_URL = "http://10.76.187.200:8000"
-POLL_INTERVAL = 0.1  # 10Hz
+POLL_INTERVAL = 0.05  # 20Hz
 
 def main():
     logging.info(f"Pi Agent Started. Backend: {BACKEND_URL}")
