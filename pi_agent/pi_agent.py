@@ -21,23 +21,26 @@ POLL_INTERVAL = 0.05  # 20Hz
 def main():
     logging.info(f"Pi Agent Started. Backend: {BACKEND_URL}")
     
+    # Use a Session for connection pooling (Keep-Alive) reduces CPU/Network load
+    session = requests.Session()
+    
     last_processed_ts = 0
     last_heartbeat = time.time()
+    last_active_time = time.time() # Track when we last corrected/moved
     
     while True:
         try:
             # 1. Watchdog Check
             if rover.check_watchdog():
-                # Watchdog handles its own logging (Transition to STOP)
                 pass
 
             # 2. Poll Backend
             try:
-                response = requests.get(f"{BACKEND_URL}/api/drive", timeout=0.5)
+                # Use session instead of requests.get
+                response = session.get(f"{BACKEND_URL}/api/drive", timeout=0.5)
                 if response.status_code == 200:
                     data = response.json()
                     
-                    # { "x": 0, "y": 0, "speed": 0, "ts": 12345.6 }
                     ts = data.get("ts", 0)
                     
                     if ts > last_processed_ts:
@@ -47,22 +50,26 @@ def main():
                         
                         rover.process_command(x, y, speed)
                         last_processed_ts = ts
+                        
+                        # If moving, mark as active
+                        if x != 0 or y != 0:
+                            last_active_time = time.time()
                     else:
                         # Idle Heartbeat (every 5s)
                         if time.time() - last_heartbeat > 5.0:
-                            logging.info("❤️  Heartbeat: Connected to Backend. Waiting for commands...")
+                            logging.info("❤️  Heartbeat: Connected. Idle...")
                             last_heartbeat = time.time()
                         
             except requests.exceptions.RequestException as e:
                 logging.warning(f"Backend Connection Failed: {e}")
-                # Optional: Stop motors if backend lost?
-                # Watchdog in motion.py checks time since last process_command
-                # So if no new command comes, it will eventually stop. Good.
 
-            # 3. Post Sensors (Future)
-            # ...
-
-            time.sleep(POLL_INTERVAL)
+            # 3. Adaptive Sleep (Smart Polling)
+            # If valid movement in last 2 seconds -> Fast Poll (20Hz)
+            # Else -> Slow Poll (2Hz) to save Wi-Fi/Battery
+            if time.time() - last_active_time < 2.0:
+                time.sleep(0.05) # 20Hz (Active)
+            else:
+                time.sleep(0.5)  # 2Hz (Power Save)
 
         except KeyboardInterrupt:
             logging.info("Stopping Pi Agent...")
