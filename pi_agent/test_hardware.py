@@ -6,85 +6,108 @@ import os
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
-def test_servo():
-    print("� Servo Calibration Tool")
-    print("-----------------------")
-    
-    try:
-        import RPi.GPIO as GPIO
-        import lgpio
-    except ImportError:
-        print("❌ ERROR: rpi-lgpio not installed. Run 'pip install rpi-lgpio'")
-        return
-
-    # Configuration load attempt
+def get_config():
     try:
         sys.path.append(os.path.dirname(os.path.abspath(__file__)))
         from config import config
-        PIN = config.SERVO_PIN_FL
-    except:
-        PIN = 23
-        print(f"⚠️ Config not found, using default Pin {PIN}")
+        return config
+    except ImportError:
+        print("❌ Could not import config. Make sure you are in the right directory.")
+        return None
 
-    print(f"\n🎯 Target Pin: {PIN}")
-    print("Commands:")
-    print("  0-180 : Move to angle")
-    print("  min   : Move to 0")
-    print("  mid   : Move to 90")
-    print("  max   : Move to 180")
-    print("  q     : Quit")
+def test_servo():
+    cfg = get_config()
+    if not cfg: return
+
+    print("\n🦾 Servo Test (Pin: {})".format(cfg.SERVO_PIN_FL))
+    print("---------------------------")
     
-    pwm = None
+    import RPi.GPIO as GPIO
+    
+    PIN = cfg.SERVO_PIN_FL # Test Front-Left as default
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(PIN, GPIO.OUT)
+    
+    pwm = GPIO.PWM(PIN, 50)
+    pwm.start(0)
+    
     try:
-        # Debugging Library Source
-        print(f"DEBUG: GPIO File: {GPIO.__file__}")
-        
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(PIN, GPIO.OUT)
-        
-        pwm = GPIO.PWM(PIN, 50) # 50Hz
-        pwm.start(0)
-        
         while True:
-            cmd = input("\n👉 Enter angle (or q): ").strip().lower()
+            val = input("Angle (0-180, 'q' to quit): ").strip()
+            if val == 'q': break
             
-            if cmd == 'q':
-                break
-                
-            angle = -1
-            if cmd == 'min': angle = 0
-            elif cmd == 'mid': angle = 90
-            elif cmd == 'max': angle = 180
-            else:
-                try:
-                    angle = float(cmd)
-                except ValueError:
-                    print("❌ Invalid input")
-                    continue
+            try:
+                angle = float(val)
+                duty = 2 + (angle / 18.0)
+                pwm.ChangeDutyCycle(duty)
+                print(f"Angle {angle} -> Duty {duty:.1f}")
+                time.sleep(0.5) # Allow measure
+            except ValueError:
+                pass
+    finally:
+        pwm.stop()
+        GPIO.cleanup()
+
+def test_motor():
+    cfg = get_config()
+    if not cfg: return
+
+    print(f"\n⚙️ Motor Test (PWM={cfg.MOTOR_PWM}, DIR={cfg.MOTOR_DIR})")
+    print("---------------------------------------")
+    
+    import RPi.GPIO as GPIO
+    
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    
+    GPIO.setup(cfg.MOTOR_PWM, GPIO.OUT)
+    GPIO.setup(cfg.MOTOR_DIR, GPIO.OUT)
+    
+    pwm = GPIO.PWM(cfg.MOTOR_PWM, cfg.PWM_FREQ_MOTOR)
+    pwm.start(0)
+    
+    print("Controls:")
+    print("  w: Forward (50%)")
+    print("  s: Backward (50%)")
+    print("  SPACE: Stop")
+    print("  q: Quit")
+    
+    try:
+        while True:
+            cmd = input("Command: ").strip().lower()
+            if cmd == 'q': break
             
-            # Map Angle to Duty Cycle
-            duty = 2 + (angle / 18.0)
+            if cmd == 'w':
+                print("⬆️ Forward 50%")
+                GPIO.output(cfg.MOTOR_DIR, GPIO.HIGH)
+                pwm.ChangeDutyCycle(50)
+            elif cmd == 's':
+                print("⬇️ Backward 50%")
+                GPIO.output(cfg.MOTOR_DIR, GPIO.LOW)
+                pwm.ChangeDutyCycle(50)
+            elif cmd == ' ':
+                print("🛑 Stop")
+                pwm.ChangeDutyCycle(0)
             
-            print(f"Angle: {angle}° -> Duty: {duty:.2f}%")
-            pwm.ChangeDutyCycle(duty)
             time.sleep(0.1)
             
-            print("...Listen for buzzing/stalling...")
-
-    except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
     finally:
-        print("\nStopping...")
-        if pwm:
-            pwm.stop()
-            del pwm
-        try:
-            GPIO.cleanup()
-        except:
-            pass
-        print("✅ Cleanup complete")
+        pwm.stop()
+        GPIO.cleanup()
+        print("Cleanup Done.")
+
+def main():
+    while True:
+        print("\n=== Hardware Tester ===")
+        print("1. Test Servos")
+        print("2. Test Motors (PWM+DIR)")
+        print("q. Quit")
+        
+        choice = input("Select: ").strip()
+        
+        if choice == '1': test_servo()
+        elif choice == '2': test_motor()
+        elif choice == 'q': break
 
 if __name__ == "__main__":
-    test_servo()
+    main()

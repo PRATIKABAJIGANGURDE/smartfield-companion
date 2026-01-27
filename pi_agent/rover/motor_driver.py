@@ -54,6 +54,10 @@ class MotorDriver:
         else:
             GPIO.output(config.MOTOR_DIR, GPIO.LOW)
             self.pwm.ChangeDutyCycle(abs(speed))
+            
+        # Debug Log
+        if speed != 0:
+             logging.info(f"⚙️ [MOTOR] Speed: {speed}")
 
     def stop(self):
         self.pwm.ChangeDutyCycle(0)
