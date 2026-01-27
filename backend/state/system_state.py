@@ -28,6 +28,16 @@ class SystemState:
                 "humidity": 60
             }
         }
+        self.last_command = {"x": 0, "y": 0, "speed": 0, "ts": 0}
+
+    def set_command(self, x, y, speed):
+        self.last_command = {
+            "x": x,
+            "y": y,
+            "speed": speed,
+            "ts": datetime.now().timestamp()
+        }
+        self.update_last_command_time()
 
     def update_last_command_time(self):
         self.last_command_time = datetime.now()

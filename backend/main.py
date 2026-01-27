@@ -9,7 +9,6 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.api import control, sensors, suggestions, status
-from backend.rover.motion import rover
 
 app = FastAPI(title="SmartFarm Rover Backend")
 
@@ -35,22 +34,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 @app.on_event("startup")
 async def startup_event():
     import asyncio
-    # Rover import handled above safely
-    
-    # Background Watchdog Task
-    async def watchdog_task():
-        print("[SYSTEM] Watchdog Task Started")
-        while True:
-            # The check_watchdog internal method handles stopping if needed
-            # We just need to call it occasionally
-            triggered = rover.check_watchdog()
-            if triggered:
-                 # Optional: wait longer if just triggered to avoid busy loop
-                 await asyncio.sleep(1.0)
-            else:
-                 await asyncio.sleep(0.1) # Check every 100ms
-                
-    asyncio.create_task(watchdog_task())
+    print("[SYSTEM] Backend Started")
+    # No local watchdog needed on backend anymore - Pi handles safety.
 
 @app.get("/")
 async def root():

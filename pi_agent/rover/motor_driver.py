@@ -1,6 +1,6 @@
 import logging
 import sys
-from backend.config import config
+from pi_agent.config import config
 
 # Mock RPi.GPIO if not running on Raspberry Pi
 try:
@@ -75,6 +75,9 @@ class MotorDriver:
         # Clamp speed
         speed = max(-config.MAX_SPEED, min(config.MAX_SPEED, speed))
         
+        # Verbose Logging for debugging
+        # logging.debug(f"Set Motor (Pin {in1}/{in2}) Speed: {speed}")
+        
         if speed >= 0:
             GPIO.output(in1, GPIO.HIGH)
             GPIO.output(in2, GPIO.LOW)
@@ -89,6 +92,8 @@ class MotorDriver:
         Set speed for both left and right motor groups.
         left_speed, right_speed: -100 to 100
         """
+        logging.info(f"⚙️  [MOTORS] Left: {left_speed} | Right: {right_speed}")
+        
         self.set_motor(
             config.LEFT_IN1, config.LEFT_IN2,
             self.pwm_left, left_speed
@@ -101,6 +106,7 @@ class MotorDriver:
 
     def stop(self):
         """Stop all motors immediately."""
+        logging.info("🛑 [MOTORS] Stopping all motors.")
         self.pwm_left.ChangeDutyCycle(0)
         self.pwm_right.ChangeDutyCycle(0)
         GPIO.output(config.LEFT_IN1, GPIO.LOW)

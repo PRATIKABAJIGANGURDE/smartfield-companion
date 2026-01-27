@@ -1,0 +1,3 @@
+requests
+pydantic-settings
+rpi-lgpio; platform_system == "Linux"

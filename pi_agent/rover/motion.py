@@ -1,6 +1,6 @@
 import time
 import logging
-from backend.config import config
+from pi_agent.config import config
 from .motor_driver import MotorDriver
 from .servo_controller import ServoController
 
@@ -59,12 +59,23 @@ class RoverMotion:
         """
         Process a high-level command to move the rover.
         """
+        # Apply Deadzone
+        if abs(x) < config.JOYSTICK_DEADZONE: x = 0
+        if abs(y) < config.JOYSTICK_DEADZONE: y = 0
+
         self.last_cmd_time = time.time()
+        self.watchdog_triggered = False  # Reset watchdog state
+        
+        # Special Case: Idle (Stop Jitter)
+        if x == 0 and y == 0:
+            self.motors.stop()
+            self.servo_fl.detach()
+            self.servo_fr.detach()
+            self.servo_rl.detach()
+            self.servo_rr.detach()
+            return
         
         # 1. Drive Motors (Differential)
-        # Note: If x determines steering, do we still want it affecting wheel speed (skid steer)?
-        # For a 6WD with 4WS, usually you do both (Ackermann-ish + Differential) to help turn.
-        # Keeping existing differential mix as requested implicitly.
         left, right = self.joystick_to_wheels(x, y, max_speed=speed)
         
         self.motors.set_speed(left, right)
@@ -85,10 +96,10 @@ class RoverMotion:
         Stops motors if timeout exceeded.
         """
         if time.time() - self.last_cmd_time > config.WATCHDOG_TIMEOUT:
-            self.motors.stop()
-            # Optional: Reset servos to center?
-            # self.servo_fl.set_angle(90)
-            # ...
+            if not getattr(self, 'watchdog_triggered', False):
+                logging.warning("🛑 WATCHDOG TRIGGERED: Timeout exceeded. Stopping motors!")
+                self.motors.stop()
+                self.watchdog_triggered = True
             return True
         return False
 

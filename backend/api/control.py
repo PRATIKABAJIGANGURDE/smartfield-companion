@@ -1,11 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from backend.rover.motion import rover
 from backend.state.system_state import state
+from typing import List, Optional
 
 router = APIRouter()
-
-from typing import List, Optional
 
 class DriveCommand(BaseModel):
     x: int = Field(..., ge=-100, le=100, description="Turn value (-100 to 100)")
@@ -17,13 +15,16 @@ class DriveCommand(BaseModel):
 @router.post("/drive")
 async def drive_rover(cmd: DriveCommand):
     try:
-        # Update system state to reflect activity
-        state.update_last_command_time()
-        
-        # Execute motor command via RoverBrain
-        rover.process_command(cmd.x, cmd.y, cmd.speed, cmd.servo_angle, cmd.servos)
-        
-        return {"status": "ok"}
+        # Store command for Pi to pick up
+        state.set_command(cmd.x, cmd.y, cmd.speed)
+        return {"status": "ok", "message": "Command queued"}
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/drive")
+async def get_drive_command():
+    """
+    Endpoint for Pi Agent to poll for the latest command.
+    """
+    return state.last_command
