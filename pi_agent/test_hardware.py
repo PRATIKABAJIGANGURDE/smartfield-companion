@@ -67,27 +67,30 @@ def test_motor():
     pwm.start(0)
     
     print("Controls:")
-    print("  w: Forward (50%)")
-    print("  s: Backward (50%)")
-    print("  SPACE: Stop")
+    print("  -100 to 100: Set Speed (Positive=Forward, Negative=Backward)")
+    print("  0: Stop")
     print("  q: Quit")
     
     try:
         while True:
-            cmd = input("Command: ").strip().lower()
+            cmd = input("Speed (-100 to 100): ").strip().lower()
             if cmd == 'q': break
             
-            if cmd == 'w':
-                print("⬆️ Forward 50%")
-                GPIO.output(cfg.MOTOR_DIR, GPIO.HIGH)
-                pwm.ChangeDutyCycle(50)
-            elif cmd == 's':
-                print("⬇️ Backward 50%")
-                GPIO.output(cfg.MOTOR_DIR, GPIO.LOW)
-                pwm.ChangeDutyCycle(50)
-            elif cmd == ' ':
-                print("🛑 Stop")
-                pwm.ChangeDutyCycle(0)
+            try:
+                speed = int(cmd)
+                speed = max(-100, min(100, speed)) # Clamp
+                
+                if speed >= 0:
+                   GPIO.output(cfg.MOTOR_DIR, GPIO.HIGH)
+                   pwm.ChangeDutyCycle(speed)
+                   print(f"⬆️ Forward {speed}%")
+                else:
+                   GPIO.output(cfg.MOTOR_DIR, GPIO.LOW)
+                   pwm.ChangeDutyCycle(abs(speed))
+                   print(f"⬇️ Backward {abs(speed)}%")
+                   
+            except ValueError:
+                print("❌ Invalid input. Enter a number.")
             
             time.sleep(0.1)
             

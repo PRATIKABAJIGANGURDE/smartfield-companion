@@ -7,7 +7,7 @@ class RoverConfig(BaseSettings):
 
     # Motor Settings
     PWM_FREQ_MOTOR: int = 1000
-    MAX_SPEED: int = 60        # Safety limit
+    MAX_SPEED: int = 100       # Full Speed allowed
     WATCHDOG_TIMEOUT: float = 1.0
     
     # Servo Settings

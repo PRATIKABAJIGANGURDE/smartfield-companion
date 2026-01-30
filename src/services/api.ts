@@ -1,6 +1,10 @@
 // Automatically use the hostname from the browser (e.g. 192.168.x.x or localhost)
 const BASE_URL = `http://${window.location.hostname}:8000/api`;
 
+import { DEMO_SENSORS, DEMO_SUGGESTIONS, DEMO_STATUS } from '@/data/demo';
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const api = {
     drive: async (x: number, y: number, speed: number, servos?: number[]) => {
         try {
@@ -18,31 +22,53 @@ export const api = {
 
     getSensors: async () => {
         try {
-            const response = await fetch(`${BASE_URL}/sensors`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
+
+            const response = await fetch(`${BASE_URL}/sensors`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error('API Error');
             return await response.json();
         } catch (error) {
-            console.error('Sensor API Error:', error);
-            return null;
+            console.warn('Backend unreachable, using demo data');
+            return DEMO_SENSORS;
         }
     },
 
     getSuggestions: async () => {
         try {
-            const response = await fetch(`${BASE_URL}/suggestions`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+            const response = await fetch(`${BASE_URL}/suggestions`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error('API Error');
             return await response.json();
         } catch (error) {
-            console.error('Suggestions API Error:', error);
-            return null;
+            return DEMO_SUGGESTIONS;
         }
     },
 
     getStatus: async () => {
         try {
-            const response = await fetch(`${BASE_URL}/status`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+            const response = await fetch(`${BASE_URL}/status`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error('API Error');
             return await response.json();
         } catch (error) {
-            console.error('Status API Error:', error);
-            return null;
+            return DEMO_STATUS;
         }
     },
 };
